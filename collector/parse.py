@@ -100,9 +100,33 @@ def parse_course(course: dict, reunion_id: int) -> dict:
 # Participants
 # ---------------------------------------------------------------------------
 
+def cle_cheval(p: dict) -> str | None:
+    """Identité du cheval, reconstruite si le PMU ne la fournit pas.
+
+    `idCheval` ('MUNCH-ACAPULCO GOLD-KENDARGENT') n'existe QUE sur les données
+    récentes : mesuré absent en 2014, 2018 et 2022, présent en 2026. S'y fier
+    seul laissait `cheval_id` à NULL sur presque tout l'historique — donc
+    aucune historisation de forme possible, alors que c'est la famille de
+    features la plus importante du projet.
+
+    Le format est `nom-nomMere-nomPere`. Ces trois champs sont présents sur
+    100 % de l'échantillon vérifié (244 partants de 2014 à 2026), et la
+    reconstruction reproduit `idCheval` à l'identique là où les deux existent
+    (57/57). On la synthétise donc quand elle manque.
+
+    Sans ascendance, on renvoie None : mieux vaut aucune identité qu'une
+    identité fausse, qui fusionnerait deux homonymes en un seul cheval.
+    """
+    if p.get("idCheval"):
+        return p["idCheval"]
+    nom, mere, pere = p.get("nom"), p.get("nomMere"), p.get("nomPere")
+    if not nom or not (mere or pere):
+        return None
+    return f"{nom}-{mere or ''}-{pere or ''}"
+
+
 def parse_cheval(p: dict) -> dict | None:
-    """`idCheval` est la clé naturelle PMU : 'MUNCH-ACAPULCO GOLD-KENDARGENT'."""
-    id_cheval = p.get("idCheval")
+    id_cheval = cle_cheval(p)
     if not id_cheval:
         return None
     return {
@@ -134,7 +158,7 @@ def parse_participant(p: dict, course_id: int, ids_chevaux: dict,
     return {
         "course_id": course_id,
         "num_pmu": p.get("numPmu"),
-        "cheval_id": ids_chevaux.get(p.get("idCheval")),
+        "cheval_id": ids_chevaux.get(cle_cheval(p)),
         "driver_id": ids_personnes.get(p.get("driver")),
         "entraineur_id": ids_personnes.get(p.get("entraineur")),
         "proprietaire_id": ids_personnes.get(p.get("proprietaire")),
