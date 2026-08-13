@@ -13,12 +13,13 @@ pour y injecter les arrivées une fois les courses courues.
 from __future__ import annotations
 
 import logging
-import os
 from datetime import date
 from typing import Any, Iterable, Sequence
 
 import psycopg
 from psycopg.types.json import Jsonb
+
+from .config import dsn_supabase
 
 log = logging.getLogger(__name__)
 
@@ -34,28 +35,12 @@ def _prepare(valeur: Any, colonne: str) -> Any:
 
 class Db:
     def __init__(self, dsn: str | None = None):
-        dsn = dsn or os.environ.get("SUPABASE_DB_URL")
-        if not dsn:
-            raise RuntimeError(
-                "SUPABASE_DB_URL manquant. Utiliser le pooler Supabase en mode "
-                "SESSION (hôte ...pooler.supabase.com, port 5432) : il est en "
-                "IPv4, ce dont les runners GitHub ont besoin, et il supporte "
-                "les prepared statements. La connexion directe est IPv6-only ; "
-                "le pooler en mode transaction (6543) casse psycopg."
-            )
-
-        # psycopg3 prépare automatiquement une requête après 5 exécutions. Le
-        # pooler en mode transaction ne supporte pas les prepared statements :
-        # le collecteur planterait au bout de quelques journées collectées.
-        # On neutralise donc la préparation si le DSN pointe vers le port 6543,
-        # plutôt que de laisser une erreur obscure remonter en production.
-        mode_transaction = ":6543" in dsn
-        if mode_transaction:
-            log.warning(
-                "DSN en port 6543 (mode transaction) : prepared statements "
-                "désactivés. Préférer le mode session (port 5432) pour de "
-                "meilleures performances."
-            )
+        # Valide l'hôte avant de tenter la connexion : une erreur de chaîne
+        # remonte sinon en « Network is unreachable » sur une adresse IPv6,
+        # message qui n'oriente pas du tout vers la vraie cause.
+        # psycopg3 prépare automatiquement une requête après 5 exécutions, ce
+        # que le pooler en mode transaction ne supporte pas — d'où la bascule.
+        dsn, mode_transaction = dsn_supabase(dsn)
         self.conn = psycopg.connect(
             dsn,
             autocommit=False,

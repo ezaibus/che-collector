@@ -16,11 +16,12 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 import sys
 from pathlib import Path
 
 import psycopg
+
+from .config import DsnInvalide, dsn_supabase
 
 log = logging.getLogger("migrate")
 
@@ -73,9 +74,10 @@ def main(argv=None) -> int:
                         format="%(asctime)s %(levelname)-7s %(message)s",
                         stream=sys.stdout)
 
-    dsn = os.environ.get("SUPABASE_DB_URL")
-    if not dsn:
-        log.error("SUPABASE_DB_URL manquant : pooler en mode session, port 5432.")
+    try:
+        dsn, _ = dsn_supabase()
+    except DsnInvalide as e:
+        log.error("%s", e)
         return 1
 
     fichiers = sorted(DOSSIER.glob("*.sql"))
