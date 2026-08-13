@@ -51,7 +51,7 @@ def main(argv=None) -> int:
             except Exception as e:                       # noqa: BLE001
                 echecs += 1
                 log.exception("%s : échec", d)
-                db.conn.rollback()
+                db.rollback()
                 db.journaliser(d, "ERREUR", erreur=f"{type(e).__name__}: {e}")
 
     return 1 if echecs else 0

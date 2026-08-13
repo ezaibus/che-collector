@@ -62,7 +62,7 @@ def main(argv=None) -> int:
         except Exception:                                # noqa: BLE001
             log.exception("Collecte initiale du %s en échec, on tente quand même",
                           aujourdhui)
-            db.conn.rollback()
+            db.rollback()
 
         courses = db.courses_du_jour(aujourdhui)
         derniere_relecture = time.monotonic()

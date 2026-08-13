@@ -67,7 +67,7 @@ def main(argv=None) -> int:
             except Exception as e:                       # noqa: BLE001
                 echecs += 1
                 log.exception("%s : échec", d)
-                db.conn.rollback()
+                db.rollback()
                 # On journalise l'échec pour pouvoir cibler une reprise, et on
                 # continue : un jour en erreur ne doit pas condamner le shard.
                 db.journaliser(d, "ERREUR", erreur=f"{type(e).__name__}: {e}")

@@ -23,12 +23,18 @@ from .config import dsn_supabase
 
 log = logging.getLogger(__name__)
 
-# Colonnes de type jsonb : psycopg n'adapte pas les listes/dicts Python tout seul.
-COLONNES_JSONB = {"res_ordre_arrivee"}
+# Colonnes jsonb : psycopg n'adapte pas les listes/dicts Python tout seul.
+#
+# La clé porte la table ET la colonne, car `res_ordre_arrivee` existe dans les
+# deux avec des types différents :
+#   courses.res_ordre_arrivee      jsonb     [[11],[5],[7]] — dead heats inclus
+#   participants.res_ordre_arrivee smallint  la place du cheval
+# Ne se fier qu'au nom de colonne enveloppait le smallint en jsonb.
+COLONNES_JSONB = {("courses", "res_ordre_arrivee")}
 
 
-def _prepare(valeur: Any, colonne: str) -> Any:
-    if colonne in COLONNES_JSONB and valeur is not None:
+def _prepare(valeur: Any, table: str, colonne: str) -> Any:
+    if (table, colonne) in COLONNES_JSONB and valeur is not None:
         return Jsonb(valeur)
     return valeur
 
@@ -57,11 +63,24 @@ class Db:
         if exc[0] is None:
             self.conn.commit()
         else:
-            self.conn.rollback()
+            self.rollback()
         self.conn.close()
 
     def commit(self):
         self.conn.commit()
+
+    def rollback(self):
+        """Annule la transaction ET vide les caches de dimensions.
+
+        Indispensable : un rollback supprime les chevaux et personnes insérés
+        pendant la transaction, mais les caches mémoire conservent leurs ids.
+        Les insertions suivantes réutiliseraient alors des identifiants qui
+        n'existent plus, et échoueraient en violation de clé étrangère — avec
+        un message pointant une journée sans rapport avec celle qui a échoué.
+        """
+        self.conn.rollback()
+        self._cache_personnes.clear()
+        self._cache_chevaux.clear()
 
     # -- moteur d'upsert générique -------------------------------------------
 
@@ -86,7 +105,7 @@ class Db:
             f"on conflict ({', '.join(conflit)}) {action}"
         )
         params = [
-            tuple(_prepare(r.get(c), c) for c in cols) for r in rows
+            tuple(_prepare(r.get(c), table, c) for c in cols) for r in rows
         ]
         with self.conn.cursor() as cur:
             cur.executemany(sql, params)
