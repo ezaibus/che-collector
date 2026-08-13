@@ -1,0 +1,37 @@
+name: Migrations base
+
+# Applique les migrations SQL depuis Actions, pour que la chaîne de connexion
+# n'ait jamais à être manipulée à la main. `schema_migrations` garantit qu'une
+# migration ne s'applique qu'une fois — relancer ce workflow est sans risque.
+on:
+  workflow_dispatch:
+    inputs:
+      etat_seulement:
+        description: "Ne rien appliquer, seulement rapporter l'état"
+        type: boolean
+        default: false
+
+concurrency:
+  group: migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Application des migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          python -m collector.migrate ${{ inputs.etat_seulement && '--etat' || '' }}
