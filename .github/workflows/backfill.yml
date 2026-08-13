@@ -27,25 +27,18 @@ jobs:
     timeout-minutes: 350
     strategy:
       fail-fast: false
-      # Volontairement bas : 4 shards x 2 req/s = ~8 req/s vers le PMU.
+      # Volontairement bas : 5 shards x 2 req/s = ~10 req/s vers le PMU.
       # Monter ce chiffre accélère le backfill mais expose à un blocage.
-      max-parallel: 4
+      max-parallel: 5
+      # Shards semestriels, pas annuels. Mesuré sur la collecte réelle :
+      # ~40 s par journée de courses, soit ~55 s au rythme du backfill
+      # (intervalle 0,5 s). Une année entière ferait ~5 h 30 pour une limite
+      # GitHub à 6 h — trop juste sur les années récentes, qui comptent plus
+      # de réunions. Un semestre tient en ~2 h 45.
       matrix:
-        annee:
-          - 2013
-          - 2014
-          - 2015
-          - 2016
-          - 2017
-          - 2018
-          - 2019
-          - 2020
-          - 2021
-          - 2022
-          - 2023
-          - 2024
-          - 2025
-          - 2026
+        annee: [2013, 2014, 2015, 2016, 2017, 2018, 2019,
+                2020, 2021, 2022, 2023, 2024, 2025, 2026]
+        semestre: [1, 2]
 
     steps:
       - uses: actions/checkout@v4
@@ -57,13 +50,16 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Collecte de l'année ${{ matrix.annee }}
+      - name: Collecte ${{ matrix.annee }} S${{ matrix.semestre }}
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           # 2013 démarre au 1er mars : l'API ne sert rien avant (204).
-          DEBUT="${{ matrix.annee }}-01-01"
-          FIN="${{ matrix.annee }}-12-31"
+          if [[ "${{ matrix.semestre }}" == "1" ]]; then
+            DEBUT="${{ matrix.annee }}-01-01"; FIN="${{ matrix.annee }}-06-30"
+          else
+            DEBUT="${{ matrix.annee }}-07-01"; FIN="${{ matrix.annee }}-12-31"
+          fi
           # Sans ce plafonnement, l'année en cours ferait journaliser en VIDE
           # toutes les dates futures — qui seraient alors sautées plus tard.
           AUJOURDHUI=$(date -u +%F)
