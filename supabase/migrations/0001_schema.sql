@@ -323,15 +323,26 @@ alter table rapports         enable row level security;
 alter table cotes_snapshots  enable row level security;
 alter table collecte_journal enable row level security;
 
+-- Postgres ne connaît pas `create policy if not exists` : on teste
+-- explicitement pg_policies, faute de quoi rejouer la migration échoue sur
+-- « policy already exists ».
 do $$
-declare t text;
+declare
+    t text;
+    nom text;
 begin
     foreach t in array array['hippodromes','personnes','chevaux','reunions',
                              'courses','participants','rapports',
                              'cotes_snapshots','collecte_journal']
     loop
-        execute format(
-            'create policy %I on %I for select to anon, authenticated using (true)',
-            'lecture_publique_' || t, t);
+        nom := 'lecture_publique_' || t;
+        if not exists (
+            select 1 from pg_policies
+             where schemaname = 'public' and tablename = t and policyname = nom
+        ) then
+            execute format(
+                'create policy %I on %I for select to anon, authenticated using (true)',
+                nom, t);
+        end if;
     end loop;
 end $$;

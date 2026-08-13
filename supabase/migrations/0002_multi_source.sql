@@ -153,5 +153,16 @@ where p.statut = 'PARTANT'
   and c.source = 'PMU';          -- seules les courses pariables sont des cibles
 
 alter table chevaux_alias enable row level security;
-create policy lecture_publique_chevaux_alias on chevaux_alias
-    for select to anon, authenticated using (true);
+
+do $$
+begin
+    if not exists (
+        select 1 from pg_policies
+         where schemaname = 'public'
+           and tablename  = 'chevaux_alias'
+           and policyname = 'lecture_publique_chevaux_alias'
+    ) then
+        create policy lecture_publique_chevaux_alias on chevaux_alias
+            for select to anon, authenticated using (true);
+    end if;
+end $$;
