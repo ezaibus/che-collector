@@ -37,11 +37,30 @@ class Db:
         dsn = dsn or os.environ.get("SUPABASE_DB_URL")
         if not dsn:
             raise RuntimeError(
-                "SUPABASE_DB_URL manquant. Utilise la chaîne du *pooler* Supabase "
-                "(port 6543) : les runners GitHub n'ont pas d'IPv6, or la connexion "
-                "directe (port 5432) est IPv6-only."
+                "SUPABASE_DB_URL manquant. Utiliser le pooler Supabase en mode "
+                "SESSION (hôte ...pooler.supabase.com, port 5432) : il est en "
+                "IPv4, ce dont les runners GitHub ont besoin, et il supporte "
+                "les prepared statements. La connexion directe est IPv6-only ; "
+                "le pooler en mode transaction (6543) casse psycopg."
             )
-        self.conn = psycopg.connect(dsn, autocommit=False)
+
+        # psycopg3 prépare automatiquement une requête après 5 exécutions. Le
+        # pooler en mode transaction ne supporte pas les prepared statements :
+        # le collecteur planterait au bout de quelques journées collectées.
+        # On neutralise donc la préparation si le DSN pointe vers le port 6543,
+        # plutôt que de laisser une erreur obscure remonter en production.
+        mode_transaction = ":6543" in dsn
+        if mode_transaction:
+            log.warning(
+                "DSN en port 6543 (mode transaction) : prepared statements "
+                "désactivés. Préférer le mode session (port 5432) pour de "
+                "meilleures performances."
+            )
+        self.conn = psycopg.connect(
+            dsn,
+            autocommit=False,
+            prepare_threshold=None if mode_transaction else 5,
+        )
         # Caches de dimensions : évitent un aller-retour par ligne.
         self._cache_personnes: dict[str, int] = {}
         self._cache_chevaux: dict[str, int] = {}

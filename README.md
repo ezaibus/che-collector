@@ -78,9 +78,20 @@ collecteur LeTrot soit encore écrit.
 2. **Secret GitHub.** Créer `SUPABASE_DB_URL` dans
    *Settings → Secrets and variables → Actions*.
 
-   > Utiliser la chaîne du **pooler** (port `6543`), pas la connexion directe
-   > (port `5432`) : cette dernière est en IPv6 seulement, or les runners
-   > GitHub n'ont pas d'IPv6. C'est la cause d'échec la plus fréquente.
+   > Prendre le pooler en **mode session** (hôte `…pooler.supabase.com`,
+   > port `5432`), et surtout pas le mode transaction (`6543`).
+   >
+   > | Mode | Port | IPv4 | Prepared statements |
+   > |---|---|---|---|
+   > | Connexion directe | 5432 | ❌ IPv6 seul | ✅ |
+   > | Pooler **session** | **5432** | ✅ | ✅ |
+   > | Pooler transaction | 6543 | ✅ | ❌ |
+   >
+   > Les runners GitHub n'ont pas d'IPv6, ce qui écarte la connexion directe.
+   > Le mode transaction, lui, ne supporte pas les prepared statements — que
+   > psycopg3 crée automatiquement après 5 exécutions. Le code neutralise la
+   > préparation s'il détecte le port 6543, mais le mode session reste le bon
+   > choix pour un script long.
 
 3. **Backfill.** Lancer manuellement le workflow *Backfill historique*. 14
    shards annuels, 4 en parallèle, ~2 h 30 chacun → une nuit environ.
@@ -105,7 +116,7 @@ boucle en interne toutes les 60 s, ce qui donne une précision à la minute.
 
 ```bash
 pip install -r requirements.txt
-export SUPABASE_DB_URL="postgresql://…@…pooler.supabase.com:6543/postgres"
+export SUPABASE_DB_URL="postgresql://postgres.<ref>:<mdp>@aws-0-<region>.pooler.supabase.com:5432/postgres"
 
 python -m collector.daily --recul 2
 python -m collector.backfill --debut 2024-01-01 --fin 2024-01-31
