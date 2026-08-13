@@ -1,0 +1,5 @@
+# Les workflows tournent sous bash sur des runners Linux : on fige LF dans le
+# dépôt, quelle que soit la plateforme de travail.
+* text=auto eol=lf
+*.png binary
+*.parquet binary

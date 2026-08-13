@@ -1,0 +1,78 @@
+name: Backfill historique
+
+# Déclenchement manuel uniquement : c'est une opération unique, longue et
+# coûteuse en requêtes vers le PMU. Un shard = une année.
+#
+# Un job GitHub est plafonné à 6 h ; une année représente ~2 h 30 à cette
+# cadence. Le découpage est donc dicté par cette limite, pas par confort.
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Recollecter les dates déjà marquées OK/VIDE"
+        type: boolean
+        default: false
+      intervalle:
+        description: "Délai min entre 2 appels API, par shard (secondes)"
+        type: string
+        default: "0.5"
+
+concurrency:
+  group: backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      # Volontairement bas : 4 shards x 2 req/s = ~8 req/s vers le PMU.
+      # Monter ce chiffre accélère le backfill mais expose à un blocage.
+      max-parallel: 4
+      matrix:
+        annee:
+          - 2013
+          - 2014
+          - 2015
+          - 2016
+          - 2017
+          - 2018
+          - 2019
+          - 2020
+          - 2021
+          - 2022
+          - 2023
+          - 2024
+          - 2025
+          - 2026
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Collecte de l'année ${{ matrix.annee }}
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          # 2013 démarre au 1er mars : l'API ne sert rien avant (204).
+          DEBUT="${{ matrix.annee }}-01-01"
+          FIN="${{ matrix.annee }}-12-31"
+          # Sans ce plafonnement, l'année en cours ferait journaliser en VIDE
+          # toutes les dates futures — qui seraient alors sautées plus tard.
+          AUJOURDHUI=$(date -u +%F)
+          if [[ "$FIN" > "$AUJOURDHUI" ]]; then FIN="$AUJOURDHUI"; fi
+          if [[ "$DEBUT" > "$FIN" ]]; then
+            echo "Rien à faire pour ${{ matrix.annee }}."; exit 0
+          fi
+          python -m collector.backfill \
+            --debut "$DEBUT" \
+            --fin   "$FIN" \
+            --intervalle "${{ inputs.intervalle }}" \
+            ${{ inputs.force && '--force' || '' }}

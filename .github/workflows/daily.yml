@@ -1,0 +1,34 @@
+name: Collecte quotidienne
+
+on:
+  schedule:
+    # 04:30 UTC : toutes les réunions de la veille sont terminées et les
+    # rapports définitifs publiés, y compris après enquête des commissaires.
+    - cron: "30 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: daily
+  cancel-in-progress: false
+
+jobs:
+  collecte:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Collecte J-2 à J+1
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        # --recul 2 : une course collectée avant son départ n'a ni arrivée ni
+        # rapports. C'est le repassage qui les récupère.
+        run: python -m collector.daily --recul 2 --avance 1

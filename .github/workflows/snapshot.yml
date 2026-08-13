@@ -1,0 +1,48 @@
+name: Relevé des cotes en direct
+
+# Trois jobs longs plutôt qu'un cron fréquent.
+#
+# Le cron GitHub descend à 5 min au mieux et se fait décaler sous charge
+# (« delayed during periods of high load »), ce qui est trop grossier et trop
+# incertain pour suivre l'évolution d'une cote. Un job de ~6 h qui boucle en
+# interne toutes les 60 s donne une précision à la minute.
+#
+# Couverture (UTC) : 08:00→13:50, 13:45→19:35, 19:30→01:20.
+# Les recouvrements sont volontaires : ils absorbent les décalages de cron, et
+# un snapshot en double est ignoré (clé primaire sur course/cheval/instant).
+on:
+  schedule:
+    - cron: "0 8 * * *"
+    - cron: "45 13 * * *"
+    - cron: "30 19 * * *"
+  workflow_dispatch:
+    inputs:
+      duree_min:
+        description: "Durée du job en minutes"
+        type: string
+        default: "350"
+
+jobs:
+  releve:
+    runs-on: ubuntu-latest
+    # 360 est le plafond GitHub ; on garde une marge pour la sortie propre.
+    timeout-minutes: 355
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Relevé des cotes
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          python -m collector.snapshot \
+            --duree-min "${{ inputs.duree_min || '350' }}" \
+            --intervalle-sec 60 \
+            --fenetre-min 45
