@@ -266,7 +266,10 @@ def parse_combinaisons(payload: dict, course_id: int) -> list[dict]:
         rang = 0
         for item in bloc.get("listeCombinaisons") or []:
             numeros, total = item.get("combinaison"), item.get("totalEnjeu")
-            if not numeros or total is None:
+            # Avant 2015, l'API sert la combinaison sans son montant. On garde
+            # quand même la ligne : le rang porte l'ordre du marché, et rejeter
+            # ces lignes donnait ni donnée ni erreur — le pire des deux.
+            if not numeros:
                 continue
             cle = "-".join(str(n) for n in numeros)
             # Une même combinaison servie deux fois casserait la clé primaire.
