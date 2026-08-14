@@ -37,7 +37,7 @@ create table if not exists schema_migrations (
 # Tables attendues après 0001 + 0002, pour le contrôle d'état.
 TABLES = ("hippodromes", "personnes", "chevaux", "reunions", "courses",
           "participants", "rapports", "cotes_snapshots", "collecte_journal",
-          "chevaux_alias")
+          "chevaux_alias", "masse_enjeu", "enjeux_combinaisons")
 
 
 def etat(conn) -> None:
