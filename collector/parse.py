@@ -223,6 +223,68 @@ def parse_participant(p: dict, course_id: int, ids_chevaux: dict,
 # Rapports définitifs
 # ---------------------------------------------------------------------------
 
+def parse_masse_enjeu(blocs: list, course_id: int) -> list[dict]:
+    """Masse totale par type de pari. Montants laissés en centimes.
+
+    On ne divise pas par 100 à l'écriture : une conversion à l'entrée est une
+    occasion silencieuse de perdre un centime sur des millions de lignes.
+    """
+    lignes = []
+    for bloc in blocs or []:
+        type_pari, total = bloc.get("typePari"), bloc.get("totalEnjeu")
+        if not type_pari or total is None:
+            continue
+        lignes.append({
+            "course_id": course_id,
+            "type_pari": type_pari,
+            "total_enjeu": total,
+            "maj_at": _ts(bloc.get("majTotalEnjeu")),
+            "evolution": bloc.get("evolution"),
+        })
+    return lignes
+
+
+def parse_combinaisons(payload: dict, course_id: int) -> list[dict]:
+    """Enjeux par combinaison.
+
+    La combinaison arrive en liste de numéros (`[5, 3]`) et non en chaîne. On
+    la stocke jointe par des tirets, dans l'ordre servi : pour un
+    COUPLE_ORDRE, « 5-3 » et « 3-5 » sont deux paris distincts, et trier
+    détruirait l'information. La normalisation, si elle a un sens, est
+    l'affaire de l'analyse.
+
+    Le rang est calculé ici plutôt que déduit plus tard : l'API sert les
+    combinaisons par enjeu décroissant, et cet ordre est lui-même une donnée.
+    """
+    lignes = []
+    for bloc in (payload or {}).get("combinaisons") or []:
+        type_pari = bloc.get("pariType")
+        if not type_pari:
+            continue
+        maj = _ts(bloc.get("updateTime"))
+        vues: set[str] = set()
+        rang = 0
+        for item in bloc.get("listeCombinaisons") or []:
+            numeros, total = item.get("combinaison"), item.get("totalEnjeu")
+            if not numeros or total is None:
+                continue
+            cle = "-".join(str(n) for n in numeros)
+            # Une même combinaison servie deux fois casserait la clé primaire.
+            if cle in vues:
+                continue
+            vues.add(cle)
+            rang += 1
+            lignes.append({
+                "course_id": course_id,
+                "type_pari": type_pari,
+                "combinaison": cle,
+                "rang": rang,
+                "total_enjeu": total,
+                "maj_at": maj,
+            })
+    return lignes
+
+
 def parse_rapports(blocs: list, course_id: int) -> list[dict]:
     """L'endpoint renvoie une liste de blocs, un par type de pari."""
     lignes = []

@@ -189,6 +189,15 @@ class Db:
         self._upsert("rapports", rows, ["course_id", "type_pari", "combinaison"])
         return len(rows)
 
+    def upsert_masse_enjeu(self, rows: Sequence[dict]) -> int:
+        self._upsert("masse_enjeu", rows, ["course_id", "type_pari"])
+        return len(rows)
+
+    def upsert_enjeux_combinaisons(self, rows: Sequence[dict]) -> int:
+        self._upsert("enjeux_combinaisons", rows,
+                     ["course_id", "type_pari", "combinaison"])
+        return len(rows)
+
     def inserer_snapshots(self, rows: Sequence[dict]) -> int:
         """Série temporelle des cotes : jamais de mise à jour, que de l'ajout."""
         self._upsert(

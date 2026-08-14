@@ -1,0 +1,62 @@
+name: Backfill des enjeux
+
+# Deux appels API par course, sur les courses déjà en base. Ne retélécharge
+# ni les participants ni les rapports : rejouer le backfill complet pour ces
+# deux endpoints coûterait dix-huit heures pour des données déjà collectées.
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Recollecter les dates déjà marquées OK/VIDE"
+        type: boolean
+        default: false
+      intervalle:
+        description: "Délai min entre 2 appels API, par shard (secondes)"
+        type: string
+        default: "0.5"
+
+concurrency:
+  group: enjeux
+  cancel-in-progress: false
+
+jobs:
+  enjeux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        annee: [2013, 2014, 2015, 2016, 2017, 2018, 2019,
+                2020, 2021, 2022, 2023, 2024, 2025, 2026]
+        semestre: [1, 2]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Enjeux ${{ matrix.annee }} S${{ matrix.semestre }}
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [[ "${{ matrix.semestre }}" == "1" ]]; then
+            DEBUT="${{ matrix.annee }}-01-01"; FIN="${{ matrix.annee }}-06-30"
+          else
+            DEBUT="${{ matrix.annee }}-07-01"; FIN="${{ matrix.annee }}-12-31"
+          fi
+          AUJOURDHUI=$(date -u +%F)
+          if [[ "$FIN" > "$AUJOURDHUI" ]]; then FIN="$AUJOURDHUI"; fi
+          if [[ "$DEBUT" > "$FIN" ]]; then
+            echo "Rien à faire pour ${{ matrix.annee }}."; exit 0
+          fi
+          python -m collector.enjeux \
+            --debut "$DEBUT" \
+            --fin   "$FIN" \
+            --intervalle "${{ inputs.intervalle }}" \
+            ${{ inputs.force && '--force' || '' }}

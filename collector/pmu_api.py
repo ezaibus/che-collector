@@ -89,3 +89,24 @@ class PmuApi:
         return self._get(
             f"{BASE_ONLINE}/programme/{self.fmt(d)}/R{r}/C{c}/rapports-definitifs"
         )
+
+    def combinaisons(self, d: date, r: int, c: int):
+        """Enjeux par combinaison, pour chaque type de pari.
+
+        L'API ne sert que les 12 combinaisons les plus jouées — c'est sa
+        limite, pas celle du client. Disponible sur l'historique : vérifié de
+        2014 à 2026.
+        """
+        return self._get(
+            f"{BASE_OFFLINE}/programme/{self.fmt(d)}/R{r}/C{c}/combinaisons"
+        )
+
+    def masse_enjeu(self, d: date, r: int, c: int):
+        """Masse totale engagée par type de pari.
+
+        Horodatée une à cinq minutes après le départ : c'est le pool final,
+        celui qui a déterminé les rapports, et non un instantané partiel.
+        """
+        return self._get(
+            f"{BASE_OFFLINE}/programme/{self.fmt(d)}/R{r}/C{c}/masse-enjeu"
+        )
