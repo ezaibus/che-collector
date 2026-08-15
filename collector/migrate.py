@@ -54,11 +54,20 @@ def etat(conn) -> None:
         for t in TABLES:
             cur.execute("select to_regclass(%s)", (f"public.{t}",))
             existe = cur.fetchone()[0] is not None
-            if existe:
-                cur.execute(f"select count(*) from {t}")     # noqa: S608
-                print(f"  {t:<20} {cur.fetchone()[0]:>10} lignes")
-            else:
+            if not existe:
                 print(f"  {t:<20} {'ABSENTE':>10}")
+                continue
+            cur.execute(f"select count(*) from {t}")         # noqa: S608
+            lignes = cur.fetchone()[0]
+            # Index compris : c'est le total qui compte pour le quota, et sur
+            # `enjeux_combinaisons` l'index pèse presque autant que les données.
+            cur.execute("select pg_size_pretty(pg_total_relation_size(%s))", (t,))
+            print(f"  {t:<20} {lignes:>10} lignes   {cur.fetchone()[0]:>10}")
+
+        # Le chiffre qui décide de la facture. Le palier gratuit s'arrête à
+        # 500 Mo, l'offre Pro à 8 Go ; au-delà le stockage est facturé au Go.
+        cur.execute("select pg_size_pretty(pg_database_size(current_database()))")
+        print(f"\nTaille totale de la base : {cur.fetchone()[0]}")
 
         cur.execute("select to_regclass('public.v_features_participants')")
         print(f"\nVue v_features_participants : "
